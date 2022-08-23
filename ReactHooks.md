@@ -18,9 +18,9 @@
 
 - [useContext](#useContext)
 
-- [useCallback](#usecallback)
+- [useCallback](#usecallback--usememo)
 
-- [useMemo](#useMemo)
+- [useMemo](#usecallback--usememo)
 
 - [useReducer](#useReducer)
 
@@ -159,18 +159,186 @@ useEffect(() => {
 
 下面是精简的代码片段（[完整版](https://codesandbox.io/s/02c-useeffect-service-lvgnb)在这里）。每个价格变化通知都会在价格上执行一个 setState，从而触发重新渲染。当活动代码更改时，您可以看到清理处理程序针对前一个代码运行。
 
-![]() ![]()
+![https://miro.medium.com/max/1052/1*825dKnt-U6dmEQjKh_fZ1w.png](https://miro.medium.com/max/1052/1*825dKnt-U6dmEQjKh_fZ1w.png) ![https://miro.medium.com/max/794/1*EvYJx6xgDVpkw7ZkkPsQZg.gif](https://miro.medium.com/max/794/1*EvYJx6xgDVpkw7ZkkPsQZg.gif)
 
 让我简要回顾一下 useEffect 调用中的依赖数组（第二个参数）。当省略此参数时，React 将在每次重新渲染后执行 useEffect 处理程序（如 useEffect 中的第一个示例）。大多数时候这将是低效的。指定依赖项后，React 将仅在该列表中的任何依赖项发生更改时运行 useEffect 处理程序。
 
 大多数情况下，无限重新渲染是未正确配置依赖项列表的结果。 例如 如果您将函数引用添加为依赖项，并且如果每次重新渲染时引用都会发生变化（重新创建函数），那么 useEffect 会在每次重新渲染时运行，并且此处理程序中的状态更改会导致重新渲染并且循环重复 导致无限渲染循环。
 
+![](https://miro.medium.com/max/700/1*H1f703MGM3VM3_I2FUcoCA.png)
+[https://codesandbox.io/s/02c-useeffect-service-lvgnb](https://codesandbox.io/s/02c-useeffect-service-lvgnb)
+
+快照中需要注意的一些有趣的事情：
+
+- #4，#16：useEffect 处理程序（用于注册价格更新）仅在代码状态更改时运行。 由于依赖列表，useEffect（和清理）处理程序没有在每次重新渲染时运行。
+- 每个价格变化通知（#5、#8、#17、#20）都会触发重新渲染，就像股票代码变化事件（#11、#12）一样。 这两个处理程序都使用 useState 更新相应的状态值。
+- 默认代码“AAPL”的清理处理程序在 useEffect 处理程序为新的代码状态“MSFT”（＃16）运行之前运行（＃15）。
+
+其他参考：
+
+- 查看 Dan 的“[Don't Stop the Data Flow in Side Effects](https://overreacted.io/writing-resilient-components/#dont-stop-the-data-flow-in-side-effects)”帖子，欣赏 useEffect 钩子的优雅。
+
 ### useLayoutEffect
+
+有时我们想要应用的副作用是直接使用 DOM 操作（基于渲染布局的 css 更新、拖放等）。在这种情况下，“useLayoutEffect”处理程序是进行这些突变的理想场所。
+
+_[来自文档](https://reactjs.org/docs/hooks-reference.html#uselayouteffect) - 签名与 useEffect 相同，但它会在所有 DOM 突变后同步触发。使用它从 DOM 中读取布局并同步重新渲染。在 useLayoutEffect 中安排的更新将在浏览器有机会绘制之前同步刷新。_
+
+让我们通过一个定制的例子来看看它的含义。这次我们想构建一个报价组件——它有一个按钮来获取随机报价和一个显示表面来呈现该报价。无论报价的大小如何，我们都希望将显示表面保持在固定高度。当检索到更长的引用时，应剪切内容并出现“扩展完整引用”链接。这是此设置的草图-![草图](https://miro.medium.com/max/700/1*3M9q8fVUmKTkbyZYp-KZBg.png)
+
+在使用 useLayoutEffect 处理程序之前，让我们继续使用已知的 useEffect 处理程序，看看为什么它在这种情况下不起作用。 下面是在渲染长引号时剪辑容器的精简代码片段——它检查容器高度并在原始高度超过阈值时添加一个“固定高度”css 类。 此代码在 useEffect 挂钩处理程序中运行。 当显示长引用时，右侧的屏幕截图显示类似闪烁的行为。
+![](https://miro.medium.com/max/661/1*5EP9mdg-VvUmL0taMXEmdg.png)![](https://miro.medium.com/max/526/1*lQOB0ll5fk9Qr2JonBkyjA.gif)
+[https://codesandbox.io/s/03a-blink-with-useeffect-e68yi](https://codesandbox.io/s/03a-blink-with-useeffect-e68yi)
+
+Chrome 性能分析器揭示了为什么会发生这种情况（下面的屏幕截图）-
+
+- 当长引用被设置为状态时，React 将完整的引用提交给 DOM。
+- 浏览器进行布局计算并在屏幕上绘制完整的报价（参考标签“浏览器在此处绘制完整的长报价”，绿色块表示绘制操作）。
+- useEffect 处理程序现在运行。 我们可以根据我们在代码中添加的自定义性能标记（“use_effect_handler_end”）来发现它的执行情况。 此标记在第一次绘制后出现。
+- 在 useEffect 处理程序中，已在容器上添加了一个 css 类来裁剪高度。 此更改强制浏览器重新运行布局和绘制操作。 请参阅标签——“浏览器应用了溢出的 CSS 并重新绘制了屏幕”。
+- 这两个油漆操作之间的（轻微）延迟导致了不和谐的体验。
+
+![性能测试](https://miro.medium.com/max/700/1*-LeuSTtR9nQ-jbfe-yPQzQ.png)
+[](https://codesandbox.io/s/03a-blink-with-useeffect-e68yi)
+
+当“useEffect”被“useLayoutEffect”替换而没有其他更改时，这种行为就会消失（[完整代码在这里](https://codesandbox.io/s/03b-no-blink-with-uselayouteffect-nvsd0)）。这是更新的性能配置文件。“use_layout_effect_handler”标记的位置（在计时选项卡中）指示 useLayoutEffect 处理程序代码的执行。 它在提交状态之后立即同步运行，这导致了一个带有“剪辑”引用（我们理想的最终状态）的绘制操作。
+
+![](https://miro.medium.com/max/700/1*KgzZhBf1qfmWwLRsohKYqA.png)
+[](https://codesandbox.io/s/03b-no-blink-with-uselayouteffect-nvsd0)
 
 ### useContext
 
-### useCallback
+[Context](https://reactjs.org/docs/context.html) 提供了一种通过组件树传递数据的方法，而无需在每个级别手动传递 props。
 
-### useMemo
+每当 Provider 的 value prop 发生变化时，[所有作为 Provider 后代的消费者都会重新渲染](https://reactjs.org/docs/context.html#contextprovider)。 从 Provider 到其后代消费者的传播不受 `shouldComponentUpdate` 方法的约束，因此即使祖先组件退出更新，消费者也会更新。
+
+让我们通过例子来理解所有这些。如果您还记得我们之前使用 useState 所做的主题选择示例。让我们使用 Context 和 useContext 重写它，看看上下文更新如何触发重新渲染。
+![Context 和 useContext 重写](https://miro.medium.com/max/663/1*SccAuTwnGveC4WzlPUMPhw.png)
+
+我们将对 UI 进行一次更改——我们将使其只有第一个 (Themed)TickerComponent 支持主题（暗/亮模式）。第二个 TickerComponent 始终以深色模式呈现。 这使我们能够看到对使用 useContext 的组件和不使用的组件的影响。
+
+这是组件的层次结构及其代码片段，包括执行日志。
+
+![](https://miro.medium.com/max/700/1*rFnCjCLBVNz_cPxu4aXUcg.png)
+[https://codesandbox.io/s/04a-usecontext-uvmi0](https://codesandbox.io/s/04a-usecontext-uvmi0)
+
+![](https://miro.medium.com/max/700/1*FnjurYOZgzKlV-fpxnr_RQ.png)
+[https://codesandbox.io/s/04a-usecontext-uvmi0](https://codesandbox.io/s/04a-usecontext-uvmi0)
+
+执行日志没有意外，当主题选择发生变化时，只有 ThemedTickerComponent 及其子 TickerComponent (1) 被重新渲染，因为它是 themeContext 的消费者。 TickerComponent2 没有日志。
+
+```js
+// ThemedTickerComponent
+const { theme } = useContext(ThemeContext);
+```
+
+#### useContext 的低效消耗
+
+让我稍微重新排列上面示例中的组件层次结构，以显示 useContext 的低效使用。 我删除了 ThemeSelector 组件，并将其所有代码移动到其父 (App) 组件中。
+![https://miro.medium.com/max/700/1*g8PmwK2ifTXBlqkojbTweQ.png](https://miro.medium.com/max/700/1*g8PmwK2ifTXBlqkojbTweQ.png)
+[https://codesandbox.io/s/04b-usecontext-bad-usage-m02xn](https://codesandbox.io/s/04b-usecontext-bad-usage-m02xn)
+
+现在有了这个设置，每次主题更改都会重新渲染 App 组件及其所有子组件，无论他们是否使用了主题。 与上一个示例不同，TickerComponent(2) 在这种情况下也被重新渲染。
+![https://miro.medium.com/max/700/1*Wi9ZmIGSDaMQB5Oz0xh8mA.png](https://miro.medium.com/max/700/1*Wi9ZmIGSDaMQB5Oz0xh8mA.png)
+[https://codesandbox.io/s/04b-usecontext-bad-usage-m02xn](https://codesandbox.io/s/04b-usecontext-bad-usage-m02xn)
+
+这是因为 App 组件现在成为了 useContext 的消费者。
+
+如果上下文值更改过于频繁，并且树中某个较高位置的组件使用 useContext 将导致重新渲染其所有子级（除非它们被记忆）。 这种情况可能会导致性能瓶颈。 与往常一样，在优化之前测量性能影响。 React 开发工具分析器应该派上用场。
+
+### useCallback & useMemo
+
+[useCallback](https://reactjs.org/docs/hooks-reference.html#usecallback) — 返回一个 [memoized](https://en.wikipedia.org/wiki/Memoization) 回调。
+
+传递一个内联回调和一组依赖项。`useCallback` 将返回回调的 memoized 版本，仅当其中一个依赖项发生更改时才会更改。 这在将回调传递给优化的子组件时很有用，这些子组件依赖于引用相等来防止不必要的渲染（例如 `shouldComponentUpdate`）。
+
+[useMemo](https://reactjs.org/docs/hooks-reference.html#usememo) — 返回一个 [memoized](https://en.wikipedia.org/wiki/Memoization) 值。
+
+传递一个“create”函数和一个依赖数组。 `useMemo` 只会在依赖项之一发生更改时重新计算记忆值。这种优化有助于避免在每次渲染时进行昂贵的计算。
+
+在构建对性能敏感的组件时，这两个钩子都会派上用场。 我们将研究另一个量身定制的示例，以有效地了解这些钩子的用法。 我们将构建一个 Stocks Watchlist 组件，如下图所示。 我们应该构建这个组件，使得删除一个代码不应该重新渲染剩余的代码（在渲染大型项目列表时这是一个合理的期望）。
+![https://miro.medium.com/max/416/1*ncTeyRfGYbT_BiIPzp6LJg.png](https://miro.medium.com/max/416/1*ncTeyRfGYbT_BiIPzp6LJg.png)
+
+我按照我最初的思考过程，通过一系列增量步骤概述了解决方案。 它还强调了我们将遇到的一些陷阱。
+
+#### step#1 — 从默认实现开始 — 不使用 useCallback/useMemo
+
+监视列表组件的片段如下所示 -
+
+- 此组件存储一个代码列表（处于状态）并定义一个 onRemove 处理程序，该处理程序通过删除作为参数发送的代码来更新状态。
+- 它通过将 ticker 值和 onRemove 处理程序作为 props 为列表中的每个 ticker 呈现 TickerComponent。
+
+如屏幕截图所示，每次删除一个代码时，所有其他代码都会重新渲染。 当一个代码被删除时，监视列表状态会更新，强制监视列表组件的子组件重新渲染。 我们在前面的 useState 示例中已经看到了这种默认行为。
+![https://miro.medium.com/max/813/1*vWyjMTsT4DLK2lr4n3kc2w.png](https://miro.medium.com/max/813/1*vWyjMTsT4DLK2lr4n3kc2w.png) ![https://miro.medium.com/max/390/1*9N6zKAu_R1KVOZLhm_r8Fg.gif](https://miro.medium.com/max/390/1*9N6zKAu_R1KVOZLhm_r8Fg.gif)
+[https://codesandbox.io/s/06a-usecallback-attempt1-xffbh](https://codesandbox.io/s/06a-usecallback-attempt1-xffbh)
+
+#### step#2 — 利用 useMemo 和 useCallback
+
+我们不希望 TickerComponent 每次重新渲染它的父级时都重新渲染，除非依赖关系发生了变化。 useMemo 钩子提供了我们正在寻找的记忆功能。
+![https://miro.medium.com/max/421/1*JEeihTPyizAfMW70XwuzHA.png](https://miro.medium.com/max/421/1*JEeihTPyizAfMW70XwuzHA.png)
+[https://codesandbox.io/s/06b-usecallback-usememo-ngwev](https://codesandbox.io/s/06b-usecallback-usememo-ngwev)
+
+此代码片段显示了利用 useMemo 挂钩的记忆化 TickerComponent。 React 跳过重新渲染组件并返回先前缓存的结果，除非列出的依赖项之一发生更改（ticker，onRemove 处理程序）。
+
+接下来，我们需要优化“onRemove”属性。 它在监视列表组件中被定义为一个匿名函数，每当监视列表组件重新呈现时，它都会重新创建。 由于每次重新渲染时它的引用都会发生变化，因此它只是取消了我们在上面所做的 TickerComponent 记忆。
+
+```js
+const onRemove = (tickerToRemove) => {
+  setWatchlist(watchlist.filter((ticker) => ticker !== tickerToRemove));
+};
+```
+
+![https://miro.medium.com/max/700/1*R-eFrwBBj1WEMee-y-PrqA.png](https://miro.medium.com/max/700/1*R-eFrwBBj1WEMee-y-PrqA.png)
+[https://codesandbox.io/s/06b-usecallback-usememo-ngwev](https://codesandbox.io/s/06b-usecallback-usememo-ngwev)
+
+我们不希望每次重新渲染都有新的函数引用。 useCallback 钩子是我们正在寻找的。 它接受一个函数并返回一个记忆函数，其引用在重新渲染之间不会改变，除非它的依赖项之一发生变化。 让我们用 useCallback 包装 onRemove 处理程序。
+
+这是进行两项更改后的日志。 有趣的是，当一个代码被移除时，这两个变化并没有停止重新渲染现有的代码组件。 您可以从现有的股票代码组件中看到“开始渲染”。
+
+![https://miro.medium.com/max/600/1*T6DSwb7siao2Dsg2FgZBfg.png](https://miro.medium.com/max/600/1*T6DSwb7siao2Dsg2FgZBfg.png)
+[https://codesandbox.io/s/06b-usecallback-usememo-ngwev](https://codesandbox.io/s/06b-usecallback-usememo-ngwev)
+
+#### 最后一步——使用 setState 的函数形式
+
+如果您仔细查看 useCallback 包装的 onRemove 处理程序，则会将监视列表添加到依赖项数组中，因为该函数会更新监视列表。 事实证明，这是重新渲染的原因。
+![https://miro.medium.com/max/700/1*1o9vOmwwzi4Qv10Bpl-pMg.png](https://miro.medium.com/max/700/1*1o9vOmwwzi4Qv10Bpl-pMg.png)
+[https://miro.medium.com/max/700/1\*1o9vOmwwzi4Qv10Bpl-pMg.png](https://miro.medium.com/max/700/1*1o9vOmwwzi4Qv10Bpl-pMg.png)
+
+每当删除代码时：
+
+- 过滤掉已删除的代码后，监视列表状态将使用新的数组引用进行更新。
+- 在下一次重新渲染中，useCallback 返回一个新的 onRemove 处理程序引用，因为它的依赖项（监视列表）已更改。
+- 新的 onRemove 处理程序引用将使 TickerComponents 的记忆无效。
+
+我们回到了与默认实现相同的问题，但现在所有记忆化（!!!）的内存占用更多
+
+为了实现我们需要的功能，即使监视列表数组发生变化，onRemove 函数引用也不应该发生变化。我们需要以某种方式创建这个函数一次并记住它，而不需要监视列表作为依赖项。
+
+值得庆幸的是，[来自 useState 钩子的 setter 函数支持一个功能变体](https://github.com/facebook/react/issues/14099)，它可以帮助我们。 我们可以发送一个获取当前状态作为参数的函数，而不是使用更新的监视列表数组调用 setWatchlist。 这是 onRemove 处理程序的修改版本，不依赖于监视列表数组。 内部函数获取当前监视列表（状态）作为参数，它过滤掉要删除的代码并返回更新的监视列表数组。 监视列表状态使用返回的值进行更新。
+
+![https://miro.medium.com/max/632/1*rGN9kn2DuUWnUu_-HfYbVg.png](https://miro.medium.com/max/632/1*rGN9kn2DuUWnUu_-HfYbVg.png)
+[https://codesandbox.io/s/06c-usecallback-final-no-rerenders-bsm64](https://codesandbox.io/s/06c-usecallback-final-no-rerenders-bsm64)
+
+这带来了我们正在寻找的所需优化。 现在删除一个代码不会重新渲染现有的代码组件（代码组件周围没有闪烁的边框）。
+
+![https://miro.medium.com/max/700/1*oCwkbbZYe5ikz4IkU9doEQ.gif](https://miro.medium.com/max/700/1*oCwkbbZYe5ikz4IkU9doEQ.gif)
+[https://codesandbox.io/s/06c-usecallback-final-no-rerenders-bsm64](https://codesandbox.io/s/06c-usecallback-final-no-rerenders-bsm64)
+
+您可能已经注意到，很容易在代码库中添加 useCallback 和 useMemo 钩子，而没有预期的性能优势。 有效地添加它们需要彻底了解组件层次结构以及衡量性能增益的正确方法。
+
+请务必查看 Kent C. Dodds 的这篇出色的帖子，该帖子彻底涵盖了该主题。 https://kentcdodds.com/blog/usememo-and-usecallback
 
 ### useReducer
+
+_[来自官方文档](http://an%20alternative%20to%20usestate.%20accepts%20a%20reducer%20of%20type%20%28state%2C%20action%29%20%3D%3E%20newstate%2C%20and%20returns%20the%20current%20state%20paired%20with%20a%20dispatch%20method.xn--%20%28if%20youre%20familiar%20with%20redux%2C%20you%20already%20know%20how%20this%20works-yk80d.%29%20%20usereducer%20is%20usually%20preferable%20to%20usestate%20when%20you%20have%20complex%20state%20logic%20that%20involves%20multiple%20sub-values%20or%20when%20the%20next%20state%20depends%20on%20the%20previous%20one.%20usereducer%20also%20lets%20you%20optimize%20performance%20for%20components%20that%20trigger%20deep%20updates%20because%20you%20can%20pass%20dispatch%20down%20instead%20of%20callbacks./)，[useState](https://reactjs.org/docs/hooks-reference.html#usestate) 的替代方案。 接受类型为 `(state, action) => newState` 的 reducer，并返回与 dispatch 方法配对的当前状态。 （如果你熟悉 Redux，你已经知道它是如何工作的。）_
+
+上面示例中的监视列表组件已修改为使用 useReducer。 这种方法使事情变得更加简单，并且不会遇到我们在前面的示例中使用 useCallback 时遇到的状态失效问题。
+
+![https://miro.medium.com/max/872/1*2QTKYPPJOHuDRvVoslSYfA.png](https://miro.medium.com/max/872/1*2QTKYPPJOHuDRvVoslSYfA.png) ![https://miro.medium.com/max/813/1*sG9m5bYTK7eJGviuTO7nJg.png](https://miro.medium.com/max/813/1*sG9m5bYTK7eJGviuTO7nJg.png)
+[https://codesandbox.io/s/07-usereducer-5l0tk](https://codesandbox.io/s/07-usereducer-5l0tk)
+
+![https://miro.medium.com/max/695/1*tEEiqKn47BmYkdMBNTM8Pw.png](https://miro.medium.com/max/695/1*tEEiqKn47BmYkdMBNTM8Pw.png) [https://codesandbox.io/s/07-usereducer-5l0tk](https://codesandbox.io/s/07-usereducer-5l0tk)
+
+这些例子澄清了我关于执行流程/重新渲染的很多问题。 他们还帮助创建了一个更好的思维模型，围绕更有效地使用钩子构建功能组件。
+
+感谢您抽出宝贵时间阅读本文。 我希望你觉得这篇文章有用。 如果您有任何反馈，请在评论中告诉我。
