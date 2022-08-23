@@ -157,13 +157,13 @@ useEffect(() => {
 
 让我们将所有这些概念与一个具体的例子联系起来。 我们希望更新代码组件，使其不断刷新活动代码的最新报价。我们将使用（模拟）流式股票报价服务。 该 API 允许为每几秒调用一次当前报价的代码注册回调。它返回一个清理处理程序，当调用 API 时停止执行代码的回调。
 
-下面是精简的代码片段（[完整版](https://codesandbox.io/s/02c-useeffect-service-lvgnb)在这里）。每个价格变化通知都会在价格上执行一个 setState，从而触发重新渲染。当活动代码更改时，您可以看到清理处理程序针对前一个代码运行。
+下面是精简的代码片段（[完整版](https://codesandbox.io/s/02c-useeffect-service-lvgnb)在这里）。每个价格变化通知都会在价格上执行一个 setState，从而触发重新渲染。当活动代码更改时，你可以看到清理处理程序针对前一个代码运行。
 
 ![https://miro.medium.com/max/1052/1*825dKnt-U6dmEQjKh_fZ1w.png](https://miro.medium.com/max/1052/1*825dKnt-U6dmEQjKh_fZ1w.png) ![https://miro.medium.com/max/794/1*EvYJx6xgDVpkw7ZkkPsQZg.gif](https://miro.medium.com/max/794/1*EvYJx6xgDVpkw7ZkkPsQZg.gif)
 
 让我简要回顾一下 useEffect 调用中的依赖数组（第二个参数）。当省略此参数时，React 将在每次重新渲染后执行 useEffect 处理程序（如 useEffect 中的第一个示例）。大多数时候这将是低效的。指定依赖项后，React 将仅在该列表中的任何依赖项发生更改时运行 useEffect 处理程序。
 
-大多数情况下，无限重新渲染是未正确配置依赖项列表的结果。 例如 如果您将函数引用添加为依赖项，并且如果每次重新渲染时引用都会发生变化（重新创建函数），那么 useEffect 会在每次重新渲染时运行，并且此处理程序中的状态更改会导致重新渲染并且循环重复 导致无限渲染循环。
+大多数情况下，无限重新渲染是未正确配置依赖项列表的结果。 例如 如果你将函数引用添加为依赖项，并且如果每次重新渲染时引用都会发生变化（重新创建函数），那么 useEffect 会在每次重新渲染时运行，并且此处理程序中的状态更改会导致重新渲染并且循环重复 导致无限渲染循环。
 
 ![](https://miro.medium.com/max/700/1*H1f703MGM3VM3_I2FUcoCA.png)
 [https://codesandbox.io/s/02c-useeffect-service-lvgnb](https://codesandbox.io/s/02c-useeffect-service-lvgnb)
@@ -212,7 +212,7 @@ Chrome 性能分析器揭示了为什么会发生这种情况（下面的屏幕�
 
 每当 Provider 的 value prop 发生变化时，[所有作为 Provider 后代的消费者都会重新渲染](https://reactjs.org/docs/context.html#contextprovider)。 从 Provider 到其后代消费者的传播不受 `shouldComponentUpdate` 方法的约束，因此即使祖先组件退出更新，消费者也会更新。
 
-让我们通过例子来理解所有这些。如果您还记得我们之前使用 useState 所做的主题选择示例。让我们使用 Context 和 useContext 重写它，看看上下文更新如何触发重新渲染。
+让我们通过例子来理解所有这些。如果你还记得我们之前使用 useState 所做的主题选择示例。让我们使用 Context 和 useContext 重写它，看看上下文更新如何触发重新渲染。
 ![Context 和 useContext 重写](https://miro.medium.com/max/663/1*SccAuTwnGveC4WzlPUMPhw.png)
 
 我们将对 UI 进行一次更改——我们将使其只有第一个 (Themed)TickerComponent 支持主题（暗/亮模式）。第二个 TickerComponent 始终以深色模式呈现。 这使我们能够看到对使用 useContext 的组件和不使用的组件的影响。
@@ -293,14 +293,14 @@ const onRemove = (tickerToRemove) => {
 
 我们不希望每次重新渲染都有新的函数引用。 useCallback 钩子是我们正在寻找的。 它接受一个函数并返回一个记忆函数，其引用在重新渲染之间不会改变，除非它的依赖项之一发生变化。 让我们用 useCallback 包装 onRemove 处理程序。
 
-这是进行两项更改后的日志。 有趣的是，当一个代码被移除时，这两个变化并没有停止重新渲染现有的代码组件。 您可以从现有的股票代码组件中看到“开始渲染”。
+这是进行两项更改后的日志。 有趣的是，当一个代码被移除时，这两个变化并没有停止重新渲染现有的代码组件。 你可以从现有的股票代码组件中看到“开始渲染”。
 
 ![https://miro.medium.com/max/600/1*T6DSwb7siao2Dsg2FgZBfg.png](https://miro.medium.com/max/600/1*T6DSwb7siao2Dsg2FgZBfg.png)
 [https://codesandbox.io/s/06b-usecallback-usememo-ngwev](https://codesandbox.io/s/06b-usecallback-usememo-ngwev)
 
 #### 最后一步——使用 setState 的函数形式
 
-如果您仔细查看 useCallback 包装的 onRemove 处理程序，则会将监视列表添加到依赖项数组中，因为该函数会更新监视列表。 事实证明，这是重新渲染的原因。
+如果你仔细查看 useCallback 包装的 onRemove 处理程序，则会将监视列表添加到依赖项数组中，因为该函数会更新监视列表。 事实证明，这是重新渲染的原因。
 ![https://miro.medium.com/max/700/1*1o9vOmwwzi4Qv10Bpl-pMg.png](https://miro.medium.com/max/700/1*1o9vOmwwzi4Qv10Bpl-pMg.png)
 [https://miro.medium.com/max/700/1\*1o9vOmwwzi4Qv10Bpl-pMg.png](https://miro.medium.com/max/700/1*1o9vOmwwzi4Qv10Bpl-pMg.png)
 
@@ -324,7 +324,7 @@ const onRemove = (tickerToRemove) => {
 ![https://miro.medium.com/max/700/1*oCwkbbZYe5ikz4IkU9doEQ.gif](https://miro.medium.com/max/700/1*oCwkbbZYe5ikz4IkU9doEQ.gif)
 [https://codesandbox.io/s/06c-usecallback-final-no-rerenders-bsm64](https://codesandbox.io/s/06c-usecallback-final-no-rerenders-bsm64)
 
-您可能已经注意到，很容易在代码库中添加 useCallback 和 useMemo 钩子，而没有预期的性能优势。 有效地添加它们需要彻底了解组件层次结构以及衡量性能增益的正确方法。
+你可能已经注意到，很容易在代码库中添加 useCallback 和 useMemo 钩子，而没有预期的性能优势。 有效地添加它们需要彻底了解组件层次结构以及衡量性能增益的正确方法。
 
 请务必查看 Kent C. Dodds 的这篇出色的帖子，该帖子彻底涵盖了该主题。 https://kentcdodds.com/blog/usememo-and-usecallback
 
@@ -341,4 +341,4 @@ _[来自官方文档](http://an%20alternative%20to%20usestate.%20accepts%20a%20r
 
 这些例子澄清了我关于执行流程/重新渲染的很多问题。 他们还帮助创建了一个更好的思维模型，围绕更有效地使用钩子构建功能组件。
 
-感谢您抽出宝贵时间阅读本文。 我希望你觉得这篇文章有用。 如果您有任何反馈，请在评论中告诉我。
+感谢你抽出宝贵时间阅读本文。 我希望你觉得这篇文章有用。 如果你有任何反馈，请在评论中告诉我。
