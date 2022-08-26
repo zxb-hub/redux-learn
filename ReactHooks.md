@@ -306,7 +306,7 @@ const onRemove = (tickerToRemove) => {
 
 #### 最后一步——使用 setState 的函数形式
 
-如果你仔细查看 useCallback 包装的 onRemove 处理程序，则会将监视列表添加到依赖项数组中，因为该函数会更新监视列表。 事实证明，这是重新渲染的原因。
+如果你仔细查看 useCallback 包装的 onRemove 处理程序，则会将监视列表添加到依赖项数组中，因为该函数会更新监视列表。事实证明，这是重新渲染的原因。
 ![https://miro.medium.com/max/700/1*1o9vOmwwzi4Qv10Bpl-pMg.png](https://miro.medium.com/max/700/1*1o9vOmwwzi4Qv10Bpl-pMg.png)
 [https://miro.medium.com/max/700/1\*1o9vOmwwzi4Qv10Bpl-pMg.png](https://miro.medium.com/max/700/1*1o9vOmwwzi4Qv10Bpl-pMg.png)
 
